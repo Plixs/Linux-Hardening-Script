@@ -256,7 +256,7 @@ main() {
         modify_root_login "$root_login_method"
     fi
 
-    systemctl restart ssh
+    sudo systemctl reload sshd
  
     # Fail2ban
     install_fail2ban
