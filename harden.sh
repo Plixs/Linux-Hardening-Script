@@ -87,26 +87,47 @@ adjust_selinux() {
 
 install_fail2ban() {
     echo "[+] Installing fail2ban..."
+
+    # 1. 安装
     if [[ "$OS" =~ (debian|ubuntu) ]]; then
         apt install -y fail2ban
     elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
         dnf install -y fail2ban
     fi
 
-    cat >/etc/fail2ban/jail.local <<EOF
+        # 2. 拷贝默认配置为 .local（仅首次）
+    [[ -f /etc/fail2ban/fail2ban.conf && ! -f /etc/fail2ban/fail2ban.local ]] \
+        && sudo cp /etc/fail2ban/fail2ban.conf /etc/fail2ban/fail2ban.local
+
+    [[ -f /etc/fail2ban/jail.conf && ! -f /etc/fail2ban/jail.local ]] \
+        && sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+    # 3. 确保日志文件目录存在（有些轻量系统没有 /var/log/auth.log）
+    if [[ ! -f /var/log/auth.log ]]; then
+        sudo mkdir -p /var/log
+        sudo touch /var/log/auth.log
+        sudo chmod 640 /var/log/auth.log
+        sudo chown root:adm /var/log/auth.log 2>/dev/null || true
+    fi
+
+    # 4. 写入 sshd jail 配置（追加或覆盖）
+    sudo tee /etc/fail2ban/jail.d/sshd.local >/dev/null <<'EOF'
 [sshd]
-enabled = true
-port = ssh
-logpath = /var/log/auth.log
+enabled  = true
+port     = ssh
+logpath  = /var/log/auth.log
+backend  = systemd
 maxretry = 5
 findtime = 600
-bantime = 3600
-backend = systemd
-mode = aggressive
+bantime  = 3600
+mode     = aggressive
 EOF
 
-    systemctl enable --now fail2ban
-    echo "[+] fail2ban configured."
+    # 5. 启动并开机自启
+    sudo systemctl enable --now fail2ban
+    sudo systemctl restart fail2ban
+
+    echo "[OK] Fail2ban has been installed and configured."
 }
 
 install_lynis() {
