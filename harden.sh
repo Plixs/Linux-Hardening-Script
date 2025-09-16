@@ -16,6 +16,11 @@ setup_user_ssh() {
             echo "$pubkey" > /home/$user/.ssh/authorized_keys
             chmod 600 /home/$user/.ssh/authorized_keys
             chown -R $user:$user /home/$user/.ssh
+            # 禁用密码登录（只允许 SSH key）
+            sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+            # 确保公钥认证开启
+            sed -i 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+            
             echo "[+] SSH key added for $user."
             break
         else
@@ -218,7 +223,7 @@ main() {
         setup_sudo_user "$sudo_user_name"
         echo "[*] Disabling root login via SSH..."
         sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-        systemctl restart sshd
+       
         read -rp "Do you want to change root password? (y/N): " choice
         [[ "$choice" =~ ^[Yy]$ ]] && passwd root
     else
@@ -227,7 +232,8 @@ main() {
         setup_sudo_user "$sudo_user_name"
         modify_root_login "$root_login_method"
     fi
-
+    systemctl restart sshd
+     
     # Fail2ban
     install_fail2ban
 
