@@ -246,7 +246,9 @@ main() {
         echo "[*] Disabling root login via SSH..."
         sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
        
-        read -rp "Do you want to change root password? (y/N): " choice
+        echo "Before read root password"
+        read -rp "Do you want to change root password? (y/N): " choice;
+        echo "After read, choice='$choice'"
         [[ "$choice" =~ ^[Yy]$ ]] && passwd root
     else
         read -rp "Root login method (password/key/skip) [skip]: " root_login_method
