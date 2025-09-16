@@ -116,25 +116,44 @@ install_lynis() {
 }
 
 configure_firewall() {
-    echo "[*] Optional firewall setup..."
+    read -rp "Do you want to configure firewall? (y/N): " choice
+    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+        echo "[*] Skipping firewall configuration."
+        return
+    fi
+
+    echo "[*] Configuring firewall..."
     if command -v ufw >/dev/null 2>&1; then
-        read -rp "Enable UFW firewall? (y/N): " choice
-        if [[ "$choice" =~ ^[Yy]$ ]]; then
-            ufw allow "$SSH_PORT"
-            ufw enable
-            echo "[+] UFW enabled."
-        fi
+        ufw allow "$SSH_PORT"
+        ufw enable
+        echo "[+] UFW enabled and SSH port allowed."
     elif command -v firewall-cmd >/dev/null 2>&1; then
-        read -rp "Enable firewalld? (y/N): " choice
-        if [[ "$choice" =~ ^[Yy]$ ]]; then
-            systemctl enable --now firewalld
-            firewall-cmd --permanent --add-port="$SSH_PORT"/tcp
-            firewall-cmd --reload
-            echo "[+] firewalld enabled."
-        fi
+        systemctl enable --now firewalld
+        firewall-cmd --permanent --add-port="$SSH_PORT"/tcp
+        firewall-cmd --reload
+        echo "[+] firewalld enabled and SSH port allowed."
     else
         echo "[*] No supported firewall detected, skipping."
     fi
+}
+
+setup_logrotate() {
+    echo "[*] Configuring logrotate for auth and system logs..."
+    cat >/etc/logrotate.d/custom_logs <<EOF
+/var/log/auth.log
+/var/log/syslog
+{
+    daily
+    rotate 7
+    size 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+EOF
+    echo "[+] Logrotate configured."
 }
 
 # -----------------------
@@ -179,8 +198,6 @@ main() {
 
     # Root login optional
     read -rp "Do you want to disable root login? (y/N): " disable_root
-
-    # Sudo user
     read -rp "Enter new sudo username: " sudo_user_name
 
     if [[ "$disable_root" =~ ^[Yy]$ ]]; then
@@ -206,6 +223,9 @@ main() {
 
     # Optional firewall
     configure_firewall
+
+    # Logrotate
+    setup_logrotate
 
     echo "[+] Hardening script completed!"
 }
