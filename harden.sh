@@ -188,6 +188,7 @@ ensure_sshd_run_dir() {
         mkdir -p /run/sshd
         chmod 755 /run/sshd
         chown root:root /run/sshd
+        install -d -m0755 -o root -g root /run/sshd
     fi
 }
 
@@ -254,7 +255,8 @@ main() {
         modify_root_login "$root_login_method"
     fi
     systemctl restart sshd
-     
+    systemctl restart ssh
+ 
     # Fail2ban
     install_fail2ban
 
