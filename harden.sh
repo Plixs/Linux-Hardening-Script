@@ -156,6 +156,15 @@ EOF
     echo "[+] Logrotate configured."
 }
 
+ensure_sshd_run_dir() {
+    if [ ! -d /run/sshd ]; then
+        echo "[*] Creating /run/sshd..."
+        mkdir -p /run/sshd
+        chmod 755 /run/sshd
+        chown root:root /run/sshd
+    fi
+}
+
 # -----------------------
 # 主逻辑
 # -----------------------
@@ -180,8 +189,10 @@ main() {
     fi
 
     # adjust_selinux
-    adjust_selinux
-
+    # adjust_selinux
+    
+    # ensure_sshd_run_dir
+    ensure_sshd_run_dir
     # SSH port
     while true; do
         read -rp "Enter new SSH port (1-65535, leave empty for random high port): " SSH_PORT
@@ -195,6 +206,9 @@ main() {
             echo "Invalid port. Enter number 1-65535."
         fi
     done
+    echo "[*] Setting SSH port to $SSHPORT..."
+    sed -i "s/^#Port .*/Port $SSHPORT/" /etc/ssh/sshd_config || echo "Port $SSHPORT" >> /etc/ssh/sshd_config
+    systemctl restart sshd
 
     # Root login optional
     read -rp "Do you want to disable root login? (y/N): " disable_root
