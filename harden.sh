@@ -2,9 +2,146 @@
 set -e
 
 # -----------------------
-# 系统检测和更新
+# 工具函数
 # -----------------------
-detect_update_os() {
+setup_user_ssh() {
+    local user=$1
+    while true; do
+        read -rp "Paste SSH public key for $user (leave empty to skip): " pubkey
+        if [[ -z "$pubkey" ]]; then
+            echo "[*] Skipping SSH key setup for $user."
+            break
+        elif [[ "$pubkey" =~ ^ssh-(rsa|ed25519|dsa|ecdsa) ]]; then
+            mkdir -p /home/$user/.ssh
+            echo "$pubkey" > /home/$user/.ssh/authorized_keys
+            chmod 600 /home/$user/.ssh/authorized_keys
+            chown -R $user:$user /home/$user/.ssh
+            echo "[+] SSH key added for $user."
+            break
+        else
+            echo "Invalid SSH key format. Try again."
+        fi
+    done
+}
+
+setup_sudo_user() {
+    local user=$1
+    echo "[*] Creating sudo user: $user"
+
+    while true; do
+        read -rsp "Set password for $user: " passwd
+        echo
+        read -rsp "Confirm password: " passwd2
+        echo
+        if [[ "$passwd" == "$passwd2" && -n "$passwd" ]]; then
+            break
+        else
+            echo "Passwords do not match or empty. Try again."
+        fi
+    done
+
+    useradd -m -s /bin/bash "$user"
+    echo "$user:$passwd" | chpasswd
+    usermod -aG sudo "$user"
+    echo "[+] Sudo user $user created with password."
+    setup_user_ssh "$user"
+}
+
+modify_root_login() {
+    local root_method=$1
+
+    case "$root_method" in
+        password)
+            echo "[*] Root login: keep existing password."
+            ;;
+        key)
+            setup_user_ssh "root"
+            ;;
+        skip)
+            echo "[*] Skipping root SSH key setup."
+            ;;
+        *)
+            echo "[!] Unknown root login method, skipping."
+            ;;
+    esac
+
+    read -rp "Do you want to change root password? (y/N): " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        passwd root
+    fi
+}
+
+adjust_selinux() {
+    # adjust_selinux
+    if [[ -f /etc/selinux/config ]]; then
+        echo "[+] Adjusting SELinux to permissive (if needed)..."
+        sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
+        setenforce 0 || true
+    fi
+}
+
+install_fail2ban() {
+    echo "[+] Installing fail2ban..."
+    if [[ "$OS" =~ (debian|ubuntu) ]]; then
+        apt install -y fail2ban
+    elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
+        dnf install -y fail2ban
+    fi
+
+    cat >/etc/fail2ban/jail.local <<EOF
+[sshd]
+enabled = true
+port = ssh
+logpath = /var/log/auth.log
+maxretry = 5
+findtime = 600
+bantime = 3600
+backend = systemd
+mode = aggressive
+EOF
+
+    systemctl enable --now fail2ban
+    echo "[+] fail2ban configured."
+}
+
+install_lynis() {
+    echo "[+] Installing Lynis..."
+    if [[ "$OS" =~ (debian|ubuntu) ]]; then
+        apt install -y lynis
+    elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
+        dnf install -y lynis
+    fi
+    echo "[+] Starting initial Lynis audit..."
+    lynis audit system --quick
+}
+
+configure_firewall() {
+    echo "[*] Optional firewall setup..."
+    if command -v ufw >/dev/null 2>&1; then
+        read -rp "Enable UFW firewall? (y/N): " choice
+        if [[ "$choice" =~ ^[Yy]$ ]]; then
+            ufw allow "$SSH_PORT"
+            ufw enable
+            echo "[+] UFW enabled."
+        fi
+    elif command -v firewall-cmd >/dev/null 2>&1; then
+        read -rp "Enable firewalld? (y/N): " choice
+        if [[ "$choice" =~ ^[Yy]$ ]]; then
+            systemctl enable --now firewalld
+            firewall-cmd --permanent --add-port="$SSH_PORT"/tcp
+            firewall-cmd --reload
+            echo "[+] firewalld enabled."
+        fi
+    else
+        echo "[*] No supported firewall detected, skipping."
+    fi
+}
+
+# -----------------------
+# 主逻辑
+# -----------------------
+main() {
+    # Detect OS
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
@@ -13,6 +150,7 @@ detect_update_os() {
         exit 1
     fi
 
+    # Update system
     echo "[+] Updating system packages..."
     if [[ "$OS" =~ (debian|ubuntu) ]]; then
         apt update && apt upgrade -y
@@ -21,228 +159,55 @@ detect_update_os() {
     else
         echo "Unsupported OS for update. Skipping..."
     fi
-}
-
-# -----------------------
-# SELinux 调整（RedHat 系列可选）
-# -----------------------
-adjust_selinux() {
-    if [[ -f /etc/selinux/config ]]; then
-        echo "[+] Adjusting SELinux to permissive (if needed)..."
-        sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
-        setenforce 0 || true
-    fi
-}
-
-# -----------------------
-# SSH 用户配置（密码或公钥）
-# -----------------------
-setup_user_ssh() {
-    local USERNAME="$1"
-    local LOGIN_METHOD="$2"
-
-    case "$LOGIN_METHOD" in
-        password)
-            passwd "$USERNAME"
-            ;;
-        key)
-            echo "[+] Paste SSH public key for $USERNAME:"
-            read -r PUBKEY
-            if [[ "$PUBKEY" =~ ^ssh-(rsa|ed25519|ecdsa|dss) ]]; then
-                mkdir -p /home/$USERNAME/.ssh
-                echo "$PUBKEY" >> /home/$USERNAME/.ssh/authorized_keys
-                chmod 700 /home/$USERNAME/.ssh
-                chmod 600 /home/$USERNAME/.ssh/authorized_keys
-                chown -R $USERNAME:$USERNAME /home/$USERNAME/.ssh
-            else
-                echo "Invalid SSH key. Skipping."
-            fi
-            ;;
-        skip)
-            echo "[+] Skipping SSH key/password setup for $USERNAME"
-            ;;
-        *)
-            echo "[!] Unknown login method: $LOGIN_METHOD"
-            ;;
-    esac
-}
-
-# -----------------------
-# 可选新 sudo 用户创建
-# -----------------------
-optional_new_sudo_user_setup() {
-    local NEW_USER="$1"
-    local LOGIN_METHOD="$2"
-
-    if id "$NEW_USER" >/dev/null 2>&1; then
-        echo "[+] User $NEW_USER already exists."
-    else
-        useradd -m -s /bin/bash "$NEW_USER"
-        usermod -aG sudo "$NEW_USER"
-        setup_user_ssh "$NEW_USER" "$LOGIN_METHOD"
-    fi
-}
-
-# -----------------------
-# 可选 root 登录管理
-# -----------------------
-optional_root_login_manage() {
-    local ROOT_METHOD="$1"
-    setup_user_ssh "root" "$ROOT_METHOD"
-}
-
-# -----------------------
-# SSH 端口修改
-# -----------------------
-change_ssh_port() {
-    while true; do
-        read -rp "Enter a new SSH port (1-65535) [Random high port]: " SSH_PORT
-        if [[ -z "$SSH_PORT" ]]; then
-            SSH_PORT=$(( (RANDOM % 55535) + 10000 ))
-        fi
-        if [[ "$SSH_PORT" =~ ^[0-9]+$ && $SSH_PORT -ge 1 && $SSH_PORT -le 65535 ]]; then
-            break
-        fi
-        echo "Invalid port. Please enter a number between 1 and 65535."
-    done
-
-    sed -i "s/^#Port 22/Port $SSH_PORT/" /etc/ssh/sshd_config
-    systemctl restart sshd
-    echo "[+] SSH port changed to $SSH_PORT"
-}
-
-# -----------------------
-# Fail2Ban 安装及配置
-# -----------------------
-setup_fail2ban() {
-    echo "[+] Installing Fail2Ban..."
-    if [[ "$OS" =~ (debian|ubuntu) ]]; then
-        apt install fail2ban -y
-    elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
-        dnf install fail2ban -y
-    fi
-
-    cat >/etc/fail2ban/jail.local <<EOF
-[sshd]
-enabled  = true
-port     = ssh
-logpath  = /var/log/auth.log
-maxretry = 5
-findtime = 600
-bantime  = 3600
-backend  = systemd
-mode     = aggressive
-EOF
-
-    systemctl enable --now fail2ban
-}
-
-# -----------------------
-# 防火墙可选配置
-# -----------------------
-setup_firewall() {
-    if command -v ufw >/dev/null 2>&1; then
-        ufw allow "$SSH_PORT"/tcp
-        ufw enable
-    elif command -v firewall-cmd >/dev/null 2>&1; then
-        firewall-cmd --permanent --add-port="$SSH_PORT"/tcp
-        firewall-cmd --reload
-    fi
-}
-
-# -----------------------
-# Lynis 安装与审计
-# -----------------------
-setup_lynis() {
-    if [[ "$OS" =~ (debian|ubuntu) ]]; then
-        apt install lynis -y
-    elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
-        dnf install lynis -y
-    fi
-
-    echo "[+] Starting initial Lynis audit..."
-    lynis audit system --quick
-}
-
-# -----------------------
-# 系统日志与缓存清理
-# -----------------------
-cleanup_system() {
-    echo "[+] Cleaning up logs and cache to free space..."
-    # Journalctl 按时间和大小
-    if command -v journalctl >/dev/null 2>&1; then
-        journalctl --vacuum-time=7d || true
-        journalctl --vacuum-size=100M || true
-    fi
-    # /var/log 日志
-    find /var/log -type f -name "*.log" -mtime +7 -exec truncate -s 0 {} \;
-    find /var/log -type f -name "*.log" -size +10M -exec truncate -s 0 {} \;
-    find /var/log -type f -name "*.gz" -delete || true
-    # 清理包缓存
-    if [[ "$OS" =~ (debian|ubuntu) ]]; then
-        apt clean
-    elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
-        dnf clean all
-    fi
-    # 清理临时目录
-    rm -rf /tmp/* /var/tmp/* || true
-    echo "[+] Cleanup done."
-}
-
-# -----------------------
-# Main
-# -----------------------
-main() {
-    detect_update_os
 
     # adjust_selinux
+    adjust_selinux
 
-    # Root 登录选项
+    # SSH port
+    while true; do
+        read -rp "Enter new SSH port (1-65535, leave empty for random high port): " SSH_PORT
+        if [[ -z "$SSH_PORT" ]]; then
+            SSH_PORT=$((RANDOM % 64512 + 1024))
+            echo "[*] Random SSH port selected: $SSH_PORT"
+            break
+        elif [[ "$SSH_PORT" =~ ^[0-9]+$ && $SSH_PORT -ge 1 && $SSH_PORT -le 65535 ]]; then
+            break
+        else
+            echo "Invalid port. Enter number 1-65535."
+        fi
+    done
+
+    # Root login optional
     read -rp "Do you want to disable root login? (y/N): " disable_root
+
+    # Sudo user
+    read -rp "Enter new sudo username: " sudo_user_name
+
     if [[ "$disable_root" =~ ^[Yy]$ ]]; then
-        ROOT_LOGIN_METHOD="skip"
-        read -rp "Enter new sudo username: " NEW_SUDO_USER
-        read -rp "Choose login method for new sudo user (password/key/skip): " user_method
-        optional_new_sudo_user_setup "$NEW_SUDO_USER" "$user_method"
-        read -rp "Do you want to change root password? (y/N): " change_root_pw
-        if [[ "$change_root_pw" =~ ^[Yy]$ ]]; then
-            passwd root
-        fi
+        setup_sudo_user "$sudo_user_name"
+        echo "[*] Disabling root login via SSH..."
+        sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+        systemctl restart sshd
+        read -rp "Do you want to change root password? (y/N): " choice
+        [[ "$choice" =~ ^[Yy]$ ]] && passwd root
     else
-        read -rp "Choose root login method (password/key/skip): " ROOT_LOGIN_METHOD
-        optional_root_login_manage "$ROOT_LOGIN_METHOD"
-        read -rp "Do you want to change root password? (y/N): " change_root_pw
-        if [[ "$change_root_pw" =~ ^[Yy]$ ]]; then
-            passwd root
-        fi
-        read -rp "Do you want to create a new sudo user? (y/N): " create_sudo
-        if [[ "$create_sudo" =~ ^[Yy]$ ]]; then
-            read -rp "Enter new sudo username: " NEW_SUDO_USER
-            read -rp "Choose login method for new sudo user (password/key/skip): " user_method
-            optional_new_sudo_user_setup "$NEW_SUDO_USER" "$user_method"
-        fi
+        read -rp "Root login method (password/key/skip) [skip]: " root_login_method
+        root_login_method=${root_login_method:-skip}
+        setup_sudo_user "$sudo_user_name"
+        modify_root_login "$root_login_method"
     fi
 
-    # SSH port change
-    change_ssh_port
+    # Fail2ban
+    install_fail2ban
 
-    # Fail2Ban
-    setup_fail2ban
+    # Lynis
+    read -rp "Do you want to install Lynis and run initial audit? (y/N): " choice
+    [[ "$choice" =~ ^[Yy]$ ]] && install_lynis
 
-    # Firewall (optional)
-    read -rp "Do you want to configure firewall? (y/N): " setup_fw
-    if [[ "$setup_fw" =~ ^[Yy]$ ]]; then
-        setup_firewall
-    fi
+    # Optional firewall
+    configure_firewall
 
-    # Lynis optional
-    read -rp "Do you want to install and run Lynis audit? (y/N): " lynis_choice
-    if [[ "$lynis_choice" =~ ^[Yy]$ ]]; then
-        setup_lynis
-    fi
-
-    # Cleanup system
-    cleanup_system
+    echo "[+] Hardening script completed!"
 }
 
 main
