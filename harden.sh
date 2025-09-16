@@ -235,7 +235,6 @@ main() {
     done
     echo "[*] Setting SSH port to $SSHPORT..."
     sed -i "s/^#Port .*/Port $SSHPORT/" /etc/ssh/sshd_config || echo "Port $SSHPORT" >> /etc/ssh/sshd_config
-    systemctl restart sshd
 
     # Root login optional
     read -rp "Do you want to disable root login? (y/N): " disable_root
@@ -256,7 +255,7 @@ main() {
         setup_sudo_user "$sudo_user_name"
         modify_root_login "$root_login_method"
     fi
-    systemctl restart sshd
+
     systemctl restart ssh
  
     # Fail2ban
