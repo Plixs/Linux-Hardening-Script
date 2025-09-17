@@ -4,6 +4,15 @@ set -e
 # -----------------------
 # 工具函数
 # -----------------------
+
+is_container() {
+    # LXD / systemd-nspawn / OpenVZ / Docker
+    [[ -f /run/.containerenv ]] \
+    || [[ -d /run/systemd/system ]] && grep -qa 'container=' /run/systemd/system/* 2>/dev/null \
+    || grep -qaE 'lxc|lxd|container' /proc/1/environ 2>/dev/null \
+    || [[ -f /proc/user_beancounters ]]   # OpenVZ
+}
+
 setup_user_ssh() {
     local user=$1
     while true; do
@@ -183,11 +192,14 @@ EOF
 }
 
 ensure_sshd_run_dir() {
-    if [ ! -d /run/sshd ]; then
-        echo "[*] Creating /run/sshd..."
-        mkdir -p /run/sshd
-        chmod 755 /run/sshd
-        chown root:root /run/sshd
+    if is_container; then
+        if [ ! -d /run/sshd ]; then
+            echo "[*] Creating /run/sshd (container fallback)…"
+            mkdir -p /run/sshd
+            chmod 755 /run/sshd
+            chown root:root /run/sshd
+        fi
+        echo "[*] Install /run/sshd (container fallback)…"
         install -d -m0755 -o root -g root /run/sshd
     fi
 }
