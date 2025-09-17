@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # -----------------------
 # 工具函数
@@ -193,14 +193,27 @@ EOF
 
 ensure_sshd_run_dir() {
     if is_container; then
-        if [ ! -d /run/sshd ]; then
-            echo "[*] Creating /run/sshd (container fallback)…"
-            mkdir -p /run/sshd
-            chmod 755 /run/sshd
-            chown root:root /run/sshd
-        fi
-        echo "[*] Install /run/sshd (container fallback)…"
-        install -d -m0755 -o root -g root /run/sshd
+        echo "[*] 1/5 写入 tmpfiles 规则..."
+        cat <<'EOF' > /etc/tmpfiles.d/sshd.conf
+        # 确保 /run/sshd 每次开机都自动创建
+        d /run/sshd 0755 root root -
+        EOF
+        
+        echo "[*] 2/5 立即创建目录并设置权限..."
+        mkdir -p /run/sshd
+        chmod 755 /run/sshd
+        
+        echo "[*] 3/5 配置 sshd ExecStartPre..."
+        mkdir -p /etc/systemd/system/ssh.service.d
+        cat <<'EOF' > /etc/systemd/system/ssh.service.d/create-run-sshd.conf
+        [Service]
+        ExecStartPre=/bin/mkdir -p /run/sshd
+        ExecStartPre=/bin/chmod 755 /run/sshd
+        EOF
+        
+        echo "[*] 4/5 重新加载 systemd 与 tmpfiles..."
+        systemd-tmpfiles --create
+    
     fi
 }
 
