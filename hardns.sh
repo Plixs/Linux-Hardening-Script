@@ -55,7 +55,7 @@ purify_and_harden_dns() {
     fi
     if [[ "$debian_version" == "11" ]] && dpkg -s resolvconf &> /dev/null; then
         log "检测到 Debian 11 上的 'resolvconf'，正在卸载..."
-        apt-get remove -y resolvconf > /dev/null
+        apt-get remove -y resolvconf
         rm -f /etc/resolv.conf
         log "${GREEN}✅ 'resolvconf' 已成功卸载。${NC}"
     fi
@@ -89,8 +89,6 @@ purify_and_harden_dns() {
     resolvectl status
     echo "===================================================="
     echo -e "\n${GREEN}DNS净化脚本执行完成${NC}"
-    echo -e "贡献者：NSdesk"
-    echo -e "更多信息：https://www.nodeseek.com/space/23129/"
     echo "===================================================="
 }
 main() {
