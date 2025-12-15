@@ -3,7 +3,7 @@
 # 【新增】前置依赖安装阶段
 log "--> 正在执行前置依赖检查与安装..."
 apt-get update -y > /dev/null
-apt-get install -y ca-certificates wget systemd-resolved > /dev/null
+apt-get install -y ca-certificates wget curl systemd-resolved > /dev/null
 log "${GREEN}✅ 前置依赖安装完成。${NC}"
 
 set -euo pipefail
