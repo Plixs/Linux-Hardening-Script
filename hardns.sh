@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 
 # 【新增】前置依赖安装阶段
-log "--> 正在执行前置依赖检查与安装..."
 apt-get update -y > /dev/null
 apt-get install -y ca-certificates wget curl systemd-resolved > /dev/null
-log "${GREEN}✅ 前置依赖安装完成。${NC}"
 
 set -euo pipefail
 readonly TARGET_DNS="8.8.8.8#dns.google 8.8.4.4#dns.google 1.1.1.1#cloudflare-dns.com 1.0.0.1#cloudflare-dns.com 2001:4860:4860::8888#dns.google 2001:4860:4860::8844#dns.google 2606:4700:4700::1111#cloudflare-dns.com 2606:4700:4700::1001#cloudflare-dns.com"
