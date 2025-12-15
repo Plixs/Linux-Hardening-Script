@@ -68,16 +68,22 @@ purify_and_harden_dns() {
     systemctl restart systemd-resolved
     sleep 1
     log "阶段三：正在安全地重启网络服务以应用所有更改..."
-    # 修改后的判断：检查是否启用 *并且* 检查服务是否正在运行或至少可以启动
-    if systemctl is-enabled --quiet networking.service && systemctl is-active --quiet networking.service; then
+
+    # 使用 is-active 检查当前正在运行的服务
+    if systemctl is-active --quiet networking.service; then
         systemctl restart networking.service
         log "${GREEN}✅ networking.service 已安全重启。${NC}"
-    elif systemctl is-enabled --quiet NetworkManager.service && systemctl is-active --quiet NetworkManager.service; then
-        systemctl restart NetworkManager.service
-        log "${GREEN}✅ NetworkManager 已安全重启。${NC}"
+    elif systemctl is-active --quiet systemd-networkd.service; then
+        # 针对您的 Debian 12 系统增加了特定的检查
+        systemctl restart systemd-networkd.service
+        log "${GREEN}✅ systemd-networkd.service 已安全重启。${NC}"
+    elif systemctl is-active --quiet NetworkManager.service; then
+         systemctl restart NetworkManager.service
+         log "${GREEN}✅ NetworkManager.service 已安全重启。${NC}"
     else
-        log_warn "未能找到正在运行或启用的网络管理服务（networking.service 或 NetworkManager），跳过重启网络服务阶段。"
+        log_warn "未能找到正在运行或启用的网络管理服务，跳过重启网络服务阶段。"
     fi
+
     echo -e "\n${GREEN}✅ 全部操作完成！以下是最终的 DNS 配置状态：${NC}"
     echo "===================================================="
     resolvectl status
