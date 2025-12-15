@@ -65,8 +65,11 @@ purify_and_harden_dns() {
     log "正在应用最终的DNS安全配置 (DoT, DNSSEC...)"
     echo -e "${SECURE_RESOLVED_CONFIG}" > /etc/systemd/resolved.conf
     ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    # 2. 重新加载并启动 resolved
+    systemctl daemon-reload
     systemctl restart systemd-resolved
-    sleep 1
+    sleep 2
+    
     log "阶段三：正在安全地重启网络服务以应用所有更改..."
 
     # 使用 is-active 检查当前正在运行的服务
@@ -83,6 +86,10 @@ purify_and_harden_dns() {
     else
         log_warn "未能找到正在运行或启用的网络管理服务，跳过重启网络服务阶段。"
     fi
+    
+    sleep 1
+    # 5. 【关键建议】最后再重启一遍 resolved 确保万无一失
+    systemctl restart systemd-resolved
 
     echo -e "\n${GREEN}✅ 全部操作完成！以下是最终的 DNS 配置状态：${NC}"
     echo "===================================================="
