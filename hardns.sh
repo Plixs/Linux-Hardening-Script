@@ -135,4 +135,3 @@ main() {
     fi
 }
 main "$@"
-SCRIPT_END
