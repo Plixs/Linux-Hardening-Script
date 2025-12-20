@@ -4,6 +4,7 @@ set -euo pipefail
 # -----------------------
 # 工具函数
 # -----------------------
+SSH_PORT=22
 
 is_container() {
     # LXD / systemd-nspawn / OpenVZ / Docker
@@ -247,7 +248,6 @@ main() {
     # ensure_sshd_run_dir
     ensure_sshd_run_dir
     # SSH port
-    SSH_PORT
     while true; do
         read -rp "Enter new SSH port (1-65535, leave empty for random high port): " SSH_PORT
         if [[ -z "$SSH_PORT" ]]; then
