@@ -188,6 +188,7 @@ setup_logrotate() {
         copytruncate
     }
     EOF
+    # T
     echo "[+] Logrotate configured."
 }
 
