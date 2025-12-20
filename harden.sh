@@ -121,16 +121,16 @@ install_fail2ban() {
 
     # 4. 写入 sshd jail 配置（追加或覆盖）
     sudo tee /etc/fail2ban/jail.d/sshd.local >/dev/null <<'EOF'
-[sshd]
-enabled  = true
-port     = ssh
-logpath  = /var/log/auth.log
-backend  = systemd
-maxretry = 5
-findtime = 600
-bantime  = 3600
-mode     = aggressive
-EOF
+    [sshd]
+    enabled  = true
+    port     = ssh
+    logpath  = /var/log/auth.log
+    backend  = systemd
+    maxretry = 5
+    findtime = 600
+    bantime  = 3600
+    mode     = aggressive
+    EOF
 
     # 5. 启动并开机自启
     sudo systemctl enable --now fail2ban
@@ -175,19 +175,19 @@ configure_firewall() {
 setup_logrotate() {
     echo "[*] Configuring logrotate for auth and system logs..."
     cat >/etc/logrotate.d/custom_logs <<EOF
-/var/log/auth.log
-/var/log/syslog
-{
-    daily
-    rotate 7
-    size 50M
-    compress
-    delaycompress
-    missingok
-    notifempty
-    copytruncate
-}
-EOF
+    /var/log/auth.log
+    /var/log/syslog
+    {
+        daily
+        rotate 7
+        size 50M
+        compress
+        delaycompress
+        missingok
+        notifempty
+        copytruncate
+    }
+    EOF
     echo "[+] Logrotate configured."
 }
 
