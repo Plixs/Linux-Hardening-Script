@@ -130,7 +130,7 @@ install_fail2ban() {
     findtime = 600
     bantime  = 3600
     mode     = aggressive
-    EOF
+EOF
 
     # 5. 启动并开机自启
     sudo systemctl enable --now fail2ban
@@ -187,7 +187,7 @@ setup_logrotate() {
         notifempty
         copytruncate
     }
-    EOF
+EOF
     # T
     echo "[+] Logrotate configured."
 }
@@ -198,7 +198,7 @@ ensure_sshd_run_dir() {
         cat <<'EOF' > /etc/tmpfiles.d/sshd.conf
         # 确保 /run/sshd 每次开机都自动创建
         d /run/sshd 0755 root root -
-        EOF
+EOF
         
         echo "[*] 2/5 立即创建目录并设置权限..."
         mkdir -p /run/sshd
@@ -210,7 +210,7 @@ ensure_sshd_run_dir() {
         [Service]
         ExecStartPre=/bin/mkdir -p /run/sshd
         ExecStartPre=/bin/chmod 755 /run/sshd
-        EOF
+EOF
         
         echo "[*] 4/5 重新加载 systemd 与 tmpfiles..."
         systemd-tmpfiles --create
