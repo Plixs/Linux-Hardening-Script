@@ -260,8 +260,8 @@ main() {
             echo "Invalid port. Enter number 1-65535."
         fi
     done
-    echo "[*] Setting SSH port to $SSHPORT..."
-    sed -i "s/^#Port .*/Port $SSHPORT/" /etc/ssh/sshd_config || echo "Port $SSHPORT" >> /etc/ssh/sshd_config
+    echo "[*] Setting SSH port to $SSH_PORT..."
+    sed -i "s/^#Port .*/Port $SSH_PORT/" /etc/ssh/sshd_config || echo "Port $SSH_PORT" >> /etc/ssh/sshd_config
 
     # Root login optional
     read -rp "Do you want to disable root login? (y/N): " disable_root
