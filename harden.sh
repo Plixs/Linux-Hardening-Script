@@ -236,6 +236,7 @@ main() {
     echo "[+] Updating system packages..."
     if [[ "$OS" =~ (debian|ubuntu) ]]; then
         apt update && apt upgrade -y
+        apt update && apt install sudo -y
     elif [[ "$OS" =~ (centos|almalinux|rhel) ]]; then
         dnf update -y
     else
