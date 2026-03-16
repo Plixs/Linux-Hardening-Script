@@ -26,7 +26,7 @@ Modfiy By AI,NOT FULL TEST.
 
 ```bash
 wget -N -O harden.sh https://github.com/Plixs/Linux-Hardening-Script/raw/refs/heads/main/harden.sh && bash harden.sh
-wget -N -O harden.sh https://github.com/Plixs/Linux-Hardening-Script/raw/refs/heads/main/hardns.sh && bash hardns.sh
+wget -N -O hardns.sh https://github.com/Plixs/Linux-Hardening-Script/raw/refs/heads/main/hardns.sh && bash hardns.sh
 
 ```
 
